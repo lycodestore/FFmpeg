@@ -4925,11 +4925,25 @@ int main(int argc, char **argv)
         fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
         return ret;
     }
+    // 设置tls相关参数
+    if ((ret = av_dict_set(&options, "ca_file", "helloworld.ca", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
+    }
+    if ((ret = av_dict_set(&options, "cert_file", "helloworld.cert_file", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
+    }
+    if ((ret = av_dict_set(&options, "key_file", "helloworld.key_file", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
+    }
     if ((ret = avio_open2(&server, out_uri, AVIO_FLAG_WRITE, NULL, &options)) < 0) {
         av_log(NULL, AV_LOG_ERROR, "Failed to open server: %s\n", av_err2str(ret));
         return ret;
     }
-    fprintf(stderr, "Entering main loop.\n");
+
+    av_log(NULL, AV_LOG_INFO, "Entering main loop.\n");
     for(;;) {
         if ((ret = avio_accept(server, &client)) < 0)
             goto end;

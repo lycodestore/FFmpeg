@@ -258,6 +258,9 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     BIO *bio;
     int ret;
 
+    av_log(NULL, AV_LOG_INFO, "tls context listen %d, ca file %s, is verify %d, cert file %s, key file %s\n", 
+            c->listen, c->ca_file, c->verify, c->cert_file, c->key_file);
+
     if ((ret = ff_openssl_init()) < 0) {
         av_log(NULL, AV_LOG_ERROR, "open ssl init err %d, error %s\n", ret, av_err2str(ret));
         return ret;
@@ -297,8 +300,6 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     }
     // Note, this doesn't check that the peer certificate actually matches
     // the requested hostname.
-    av_log(NULL, AV_LOG_INFO, "tls context listen %d, ca file %s, is verify %d, cert file %s, key file %s\n", 
-            c->listen, c->ca_file, c->verify, c->cert_file, c->key_file);
 
     if (c->verify)
         SSL_CTX_set_verify(p->ctx, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
