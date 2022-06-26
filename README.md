@@ -51,3 +51,26 @@ avoided because they are not part of our review process and will be ignored.
 ```
 ./configure --enable-openssl
 ```
+
+http 
+
+```
+if ((ret = av_dict_set(&options, "listen", "2", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
+    }
+
+./ffmpeg resource/yuanmie.mp4 "http://0.0.0.0:9090"
+```
+
+
+https
+
+```
+if ((ret = av_dict_set(&options, "listen", "1", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
+    }
+
+./ffmpeg resource/yuanmie.mp4 "https://0.0.0.0:9090"
+```

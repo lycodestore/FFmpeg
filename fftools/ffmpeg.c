@@ -4920,12 +4920,13 @@ int main(int argc, char **argv)
 
     avformat_network_init();
 
-    // http服务端设置为2， https服务端设置为1
+    // http服务端设置为2， https服务端设置为1， http客户端设置为0或者不设置，默认就是0
     if ((ret = av_dict_set(&options, "listen", "1", 0)) < 0) {
         fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
         return ret;
     }
-    // 设置tls相关参数
+
+    // https时，需要设置tls相关参数
     if ((ret = av_dict_set(&options, "ca_file", "helloworld.ca", 0)) < 0) {
         fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
         return ret;
