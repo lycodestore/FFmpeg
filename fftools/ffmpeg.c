@@ -4916,15 +4916,17 @@ int main(int argc, char **argv)
 
     in_uri = argv[1];
     out_uri = argv[2];
+    av_log(NULL, AV_LOG_INFO, "input url is %s, output url is %s\n", in_uri, out_uri);
 
     avformat_network_init();
 
-    if ((ret = av_dict_set(&options, "listen", "2", 0)) < 0) {
+    // http服务端设置为2， https服务端设置为1
+    if ((ret = av_dict_set(&options, "listen", "1", 0)) < 0) {
         fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
         return ret;
     }
     if ((ret = avio_open2(&server, out_uri, AVIO_FLAG_WRITE, NULL, &options)) < 0) {
-        fprintf(stderr, "Failed to open server: %s\n", av_err2str(ret));
+        av_log(NULL, AV_LOG_ERROR, "Failed to open server: %s\n", av_err2str(ret));
         return ret;
     }
     fprintf(stderr, "Entering main loop.\n");

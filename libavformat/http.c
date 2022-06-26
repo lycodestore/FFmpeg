@@ -598,17 +598,31 @@ static int http_listen(URLContext *h, const char *uri, int flags,
     int port;
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname), &port,
                  NULL, 0, uri);
-    if (!strcmp(proto, "https"))
+    if (!strcmp(proto, "https")) {
+        av_log(NULL, AV_LOG_INFO, "protocol is https\n");
         lower_proto = "tls";
+    }
+        
     ff_url_join(lower_url, sizeof(lower_url), lower_proto, NULL, hostname, port,
                 NULL);
-    if ((ret = av_dict_set_int(options, "listen", s->listen, 0)) < 0)
+    av_log(NULL, AV_LOG_INFO, "after url join, start to init dict\n");
+    if ((ret = av_dict_set_int(options, "listen", s->listen, 0)) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "http av dict set init err %d, error %s", ret, av_err2str(ret));
         goto fail;
-    if ((ret = ffurl_open_whitelist(&s->hd, lower_url, AVIO_FLAG_READ_WRITE,
+    }
+
+    av_log(NULL, AV_LOG_INFO, "before open white list, protocol %s, url %s\n", 
+            h->prot->name, h->filename);
+            
+    ret = ffurl_open_whitelist(&s->hd, lower_url, AVIO_FLAG_READ_WRITE,
                                     &h->interrupt_callback, options,
                                     h->protocol_whitelist, h->protocol_blacklist, h
-                                   )) < 0)
+                                   );
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "open white list err %d, error %s\n", ret, av_err2str(ret));
         goto fail;
+    }
+
     s->handshake_step = LOWER_PROTO;
     if (s->listen == HTTP_SINGLE) { /* single client */
         s->reply_code = 200;
@@ -623,6 +637,8 @@ fail:
 static int http_open(URLContext *h, const char *uri, int flags,
                      AVDictionary **options)
 {
+    av_log(NULL, AV_LOG_INFO,
+                   "url %s, name %s \n", h->filename, h->prot->name);
     HTTPContext *s = h->priv_data;
     int ret;
 
@@ -659,11 +675,17 @@ static int http_open(URLContext *h, const char *uri, int flags,
     }
 
     if (s->listen) {
+        av_log(NULL, AV_LOG_INFO,
+                   "start to listen http.\n");
         return http_listen(h, uri, flags, options);
     }
+    av_log(NULL, AV_LOG_INFO,
+                   "before http open cnx\n");
     ret = http_open_cnx(h, options);
 bail_out:
     if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR,
+                   "http open cnx failed, err %d, error %s.\n", ret, av_err2str(ret));
         av_dict_free(&s->chained_options);
         av_dict_free(&s->cookie_dict);
         av_freep(&s->uri);

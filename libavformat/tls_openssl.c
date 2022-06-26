@@ -251,6 +251,7 @@ static BIO_METHOD url_bio_method = {
 
 static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **options)
 {
+    av_log(NULL, AV_LOG_INFO, "tls open \n");
     TLSContext *p = h->priv_data;
     TLSShared *c = &p->tls_shared;
     BIO *bio;

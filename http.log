@@ -1,0 +1,25 @@
+fftools/ffmpeg.c|main|4919|input url is resource/yuanmie.mp4, output url is https://0.0.0.0:9090
+libavformat/avio.c|ffurl_open_whitelist|321|enter open white list
+[https @ 0x55600ff41540] libavformat/avio.c|ffurl_connect|192|Setting default whitelist 'http,https,tls,rtp,tcp,udp,crypto,httpproxy'
+libavformat/avio.c|ffurl_connect|200|start to set options 
+libavformat/avio.c|ffurl_connect|211|start to open url , protocol name https, url https://0.0.0.0:9090
+libavformat/http.c|http_open|640|url https://0.0.0.0:9090, name https 
+libavformat/http.c|http_open|678|start to listen http.
+libavformat/http.c|http_listen|602|protocol is https
+libavformat/http.c|http_listen|608|after url join, start to init dict
+libavformat/http.c|http_listen|614|before open white list, protocol https, url https://0.0.0.0:9090
+libavformat/avio.c|ffurl_open_whitelist|321|enter open white list
+libavformat/avio.c|ffurl_connect|200|start to set options 
+libavformat/avio.c|ffurl_connect|211|start to open url , protocol name tls, url tls://0.0.0.0:9090
+libavformat/tls_openssl.c|tls_open|254|tls open 
+libavformat/avio.c|ffurl_open_whitelist|321|enter open white list
+libavformat/avio.c|ffurl_connect|200|start to set options 
+libavformat/avio.c|ffurl_connect|211|start to open url , protocol name tcp, url tcp://0.0.0.0:9090?listen=1
+libavformat/avio.c|ffurl_open_whitelist|374|connect result ret 0, error Success
+[tls @ 0x55600ff446c0] libavformat/tls_openssl.c|print_tls_error|135|error:1408F09C:SSL routines:ssl3_get_record:http request
+libavformat/avio.c|ffurl_connect|223|url open failed, error Input/output error , -5
+libavformat/avio.c|ffurl_open_whitelist|374|connect result ret -5, error Input/output error
+libavformat/http.c|http_listen|622|open white list err -5, error Input/output error
+libavformat/avio.c|ffurl_connect|223|url open failed, error Input/output error , -5
+libavformat/avio.c|ffurl_open_whitelist|374|connect result ret -5, error Input/output error
+fftools/ffmpeg.c|main|4928|Failed to open server: Input/output error

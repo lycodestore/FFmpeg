@@ -197,23 +197,33 @@ int ffurl_connect(URLContext *uc, AVDictionary **options)
     } else if (!uc->protocol_whitelist)
         av_log(uc, AV_LOG_DEBUG, "No default whitelist set\n"); // This should be an error once all declare a default whitelist
 
-    if ((err = av_dict_set(options, "protocol_whitelist", uc->protocol_whitelist, 0)) < 0)
+    av_log(NULL, AV_LOG_INFO, "start to set options \n");
+    if ((err = av_dict_set(options, "protocol_whitelist", uc->protocol_whitelist, 0)) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "set protocol whitelist error %s , %d\n", av_err2str(err), err);
         return err;
-    if ((err = av_dict_set(options, "protocol_blacklist", uc->protocol_blacklist, 0)) < 0)
+    }
+        
+    if ((err = av_dict_set(options, "protocol_blacklist", uc->protocol_blacklist, 0)) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "set protocol blacklist error %s , %d\n", av_err2str(err), err);
         return err;
+    }
 
+    av_log(NULL, AV_LOG_INFO, "start to open url , protocol name %s, url %s\n", uc->prot->name, uc->filename);
     err =
         uc->prot->url_open2 ? uc->prot->url_open2(uc,
                                                   uc->filename,
                                                   uc->flags,
                                                   options) :
         uc->prot->url_open(uc, uc->filename, uc->flags);
-
+    
     av_dict_set(options, "protocol_whitelist", NULL, 0);
     av_dict_set(options, "protocol_blacklist", NULL, 0);
 
-    if (err)
+    if (err) {
+        av_log(NULL, AV_LOG_ERROR, "url open failed, error %s , %d\n", av_err2str(err), err);
         return err;
+    }
+        
     uc->is_connected = 1;
     /* We must be careful here as ffurl_seek() could be slow,
      * for example for http */
@@ -308,22 +318,38 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
                          const char *whitelist, const char* blacklist,
                          URLContext *parent)
 {
+    av_log(NULL, AV_LOG_INFO, "enter open white list\n");
+    // URLContext *uc = *puc;
+    // av_log(NULL, AV_LOG_INFO, "enter open whitelist, protocol %s, url %s\n", 
+    //         uc->prot->name, uc->filename);
+
     AVDictionary *tmp_opts = NULL;
     AVDictionaryEntry *e;
     int ret = ffurl_alloc(puc, filename, flags, int_cb);
-    if (ret < 0)
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "url alloc failed, err %d, error %s\n", ret, av_err2str(ret));
         return ret;
+    }
+
     if (parent) {
         ret = av_opt_copy(*puc, parent);
-        if (ret < 0)
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_ERROR, "av opt copy failed, err %d, error %s\n", ret, av_err2str(ret));
             goto fail;
+        }
     }
     if (options &&
-        (ret = av_opt_set_dict(*puc, options)) < 0)
-        goto fail;
+        (ret = av_opt_set_dict(*puc, options)) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "puc set dict err %d, error %s\n", ret, av_err2str(ret));
+            goto fail;
+        }
+        
     if (options && (*puc)->prot->priv_data_class &&
-        (ret = av_opt_set_dict((*puc)->priv_data, options)) < 0)
-        goto fail;
+        (ret = av_opt_set_dict((*puc)->priv_data, options)) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "private data set dict err %d, error %s\n", ret, av_err2str(ret));
+            goto fail;
+        }
+        
 
     if (!options)
         options = &tmp_opts;
@@ -345,6 +371,7 @@ int ffurl_open_whitelist(URLContext **puc, const char *filename, int flags,
         goto fail;
 
     ret = ffurl_connect(*puc, options);
+    av_log(NULL, AV_LOG_INFO, "connect result ret %d, error %s\n", ret, av_err2str(ret));
 
     if (!ret)
         return 0;
