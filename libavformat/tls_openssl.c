@@ -148,6 +148,7 @@ static int print_tls_error(URLContext *h, int ret)
 
 static int tls_close(URLContext *h)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tls close\n");
     TLSContext *c = h->priv_data;
     if (c->ssl) {
         SSL_shutdown(c->ssl);
@@ -257,11 +258,15 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     BIO *bio;
     int ret;
 
-    if ((ret = ff_openssl_init()) < 0)
+    if ((ret = ff_openssl_init()) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "open ssl init err %d, error %s\n", ret, av_err2str(ret));
         return ret;
+    }
 
-    if ((ret = ff_tls_open_underlying(c, h, uri, options)) < 0)
+    if ((ret = ff_tls_open_underlying(c, h, uri, options)) < 0) {
+        av_log(NULL, AV_LOG_ERROR, "tls open underlying err %d, error %s\n", ret, av_err2str(ret));
         goto fail;
+    }
 
     // We want to support all versions of TLS >= 1.0, but not the deprecated
     // and insecure SSLv2 and SSLv3.  Despite the name, SSLv23_*_method()
@@ -269,7 +274,7 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     // support for the old protocols immediately after creating the context.
     p->ctx = SSL_CTX_new(c->listen ? SSLv23_server_method() : SSLv23_client_method());
     if (!p->ctx) {
-        av_log(h, AV_LOG_ERROR, "%s\n", ERR_error_string(ERR_get_error(), NULL));
+        av_log(h, AV_LOG_ERROR, "SSL_CTX_new error %s\n", ERR_error_string(ERR_get_error(), NULL));
         ret = AVERROR(EIO);
         goto fail;
     }
@@ -292,6 +297,9 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
     }
     // Note, this doesn't check that the peer certificate actually matches
     // the requested hostname.
+    av_log(NULL, AV_LOG_INFO, "tls context listen %d, ca file %s, is verify %d, cert file %s, key file %s\n", 
+            c->listen, c->ca_file, c->verify, c->cert_file, c->key_file);
+
     if (c->verify)
         SSL_CTX_set_verify(p->ctx, SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
     p->ssl = SSL_new(p->ctx);
@@ -323,6 +331,7 @@ static int tls_open(URLContext *h, const char *uri, int flags, AVDictionary **op
         ret = AVERROR(EIO);
         goto fail;
     } else if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "tls accept err %d, error %s\n", ret, av_err2str(ret));
         ret = print_tls_error(h, ret);
         goto fail;
     }
@@ -335,6 +344,7 @@ fail:
 
 static int tls_read(URLContext *h, uint8_t *buf, int size)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tls read\n");
     TLSContext *c = h->priv_data;
     int ret;
     // Set or clear the AVIO_FLAG_NONBLOCK on c->tls_shared.tcp
@@ -350,6 +360,7 @@ static int tls_read(URLContext *h, uint8_t *buf, int size)
 
 static int tls_write(URLContext *h, const uint8_t *buf, int size)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tls write\n");
     TLSContext *c = h->priv_data;
     int ret;
     // Set or clear the AVIO_FLAG_NONBLOCK on c->tls_shared.tcp
@@ -365,12 +376,14 @@ static int tls_write(URLContext *h, const uint8_t *buf, int size)
 
 static int tls_get_file_handle(URLContext *h)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tls_get_file_handle\n");
     TLSContext *c = h->priv_data;
     return ffurl_get_file_handle(c->tls_shared.tcp);
 }
 
 static int tls_get_short_seek(URLContext *h)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tls_get_short_seek\n");
     TLSContext *s = h->priv_data;
     return ffurl_get_short_seek(s->tls_shared.tcp);
 }
