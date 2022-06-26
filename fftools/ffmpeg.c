@@ -4836,78 +4836,124 @@ static int64_t getmaxrss(void)
 #endif
 }
 
-static void log_callback_null(void *ptr, int level, const char *fmt, va_list vl)
+static void process_client(AVIOContext *client, const char *in_uri)
 {
+    AVIOContext *input = NULL;
+    uint8_t buf[1024];
+    int ret, n, reply_code;
+    uint8_t *resource = NULL;
+    while ((ret = avio_handshake(client)) > 0) {
+        av_opt_get(client, "resource", AV_OPT_SEARCH_CHILDREN, &resource);
+        // check for strlen(resource) is necessary, because av_opt_get()
+        // may return empty string.
+        if (resource && strlen(resource))
+            break;
+        av_freep(&resource);
+    }
+    if (ret < 0)
+        goto end;
+    av_log(client, AV_LOG_TRACE, "resource=%p\n", resource);
+    if (resource && resource[0] == '/' && !strcmp((resource + 1), in_uri)) {
+        reply_code = 200;
+    } else {
+        reply_code = AVERROR_HTTP_NOT_FOUND;
+    }
+    if ((ret = av_opt_set_int(client, "reply_code", reply_code, AV_OPT_SEARCH_CHILDREN)) < 0) {
+        av_log(client, AV_LOG_ERROR, "Failed to set reply_code: %s.\n", av_err2str(ret));
+        goto end;
+    }
+    av_log(client, AV_LOG_TRACE, "Set reply code to %d\n", reply_code);
+
+    while ((ret = avio_handshake(client)) > 0);
+
+    if (ret < 0)
+        goto end;
+
+    fprintf(stderr, "Handshake performed.\n");
+    if (reply_code != 200)
+        goto end;
+    fprintf(stderr, "Opening input file.\n");
+    if ((ret = avio_open2(&input, in_uri, AVIO_FLAG_READ, NULL, NULL)) < 0) {
+        av_log(input, AV_LOG_ERROR, "Failed to open input: %s: %s.\n", in_uri,
+               av_err2str(ret));
+        goto end;
+    }
+    for(;;) {
+        n = avio_read(input, buf, sizeof(buf));
+        if (n < 0) {
+            if (n == AVERROR_EOF)
+                break;
+            av_log(input, AV_LOG_ERROR, "Error reading from input: %s.\n",
+                   av_err2str(n));
+            break;
+        }
+        avio_write(client, buf, n);
+        avio_flush(client);
+    }
+end:
+    fprintf(stderr, "Flushing client\n");
+    avio_flush(client);
+    fprintf(stderr, "Closing client\n");
+    avio_close(client);
+    fprintf(stderr, "Closing input\n");
+    avio_close(input);
+    av_freep(&resource);
 }
 
 int main(int argc, char **argv)
 {
-    int i, ret;
-    BenchmarkTimeStamps ti;
-
-    init_dynload();
-
-    register_exit(ffmpeg_cleanup);
-
-    setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
-
-    av_log_set_flags(AV_LOG_SKIP_REPEATED);
-    parse_loglevel(argc, argv, options);
-
-    if(argc>1 && !strcmp(argv[1], "-d")){
-        run_as_daemon=1;
-        av_log_set_callback(log_callback_null);
-        argc--;
-        argv++;
+    AVDictionary *options = NULL;
+    AVIOContext *client = NULL, *server = NULL;
+    const char *in_uri, *out_uri;
+    int ret, pid;
+    av_log_set_level(AV_LOG_TRACE);
+    if (argc < 3) {
+        printf("usage: %s input http://hostname[:port]\n"
+               "API example program to serve http to multiple clients.\n"
+               "\n", argv[0]);
+        return 1;
     }
 
-#if CONFIG_AVDEVICE
-    avdevice_register_all();
-#endif
+    in_uri = argv[1];
+    out_uri = argv[2];
+
     avformat_network_init();
 
-    show_banner(argc, argv, options);
-
-    /* parse options and open all input/output files */
-    ret = ffmpeg_parse_options(argc, argv);
-    if (ret < 0)
-        exit_program(1);
-
-    if (nb_output_files <= 0 && nb_input_files == 0) {
-        show_usage();
-        av_log(NULL, AV_LOG_WARNING, "Use -h to get full help or, even better, run 'man %s'\n", program_name);
-        exit_program(1);
+    if ((ret = av_dict_set(&options, "listen", "2", 0)) < 0) {
+        fprintf(stderr, "Failed to set listen mode for server: %s\n", av_err2str(ret));
+        return ret;
     }
-
-    /* file converter / grab */
-    if (nb_output_files <= 0) {
-        av_log(NULL, AV_LOG_FATAL, "At least one output file must be specified\n");
-        exit_program(1);
+    if ((ret = avio_open2(&server, out_uri, AVIO_FLAG_WRITE, NULL, &options)) < 0) {
+        fprintf(stderr, "Failed to open server: %s\n", av_err2str(ret));
+        return ret;
     }
-
-    for (i = 0; i < nb_output_files; i++) {
-        if (strcmp(output_files[i]->ctx->oformat->name, "rtp"))
-            want_sdp = 0;
+    fprintf(stderr, "Entering main loop.\n");
+    for(;;) {
+        if ((ret = avio_accept(server, &client)) < 0)
+            goto end;
+        fprintf(stderr, "Accepted client, forking process.\n");
+        // XXX: Since we don't reap our children and don't ignore signals
+        //      this produces zombie processes.
+        pid = fork();
+        if (pid < 0) {
+            perror("Fork failed");
+            ret = AVERROR(errno);
+            goto end;
+        }
+        if (pid == 0) {
+            fprintf(stderr, "In child.\n");
+            process_client(client, in_uri);
+            avio_close(server);
+            exit(0);
+        }
+        if (pid > 0)
+            avio_close(client);
     }
-
-    current_time = ti = get_benchmark_time_stamps();
-    if (transcode() < 0)
-        exit_program(1);
-    if (do_benchmark) {
-        int64_t utime, stime, rtime;
-        current_time = get_benchmark_time_stamps();
-        utime = current_time.user_usec - ti.user_usec;
-        stime = current_time.sys_usec  - ti.sys_usec;
-        rtime = current_time.real_usec - ti.real_usec;
-        av_log(NULL, AV_LOG_INFO,
-               "bench: utime=%0.3fs stime=%0.3fs rtime=%0.3fs\n",
-               utime / 1000000.0, stime / 1000000.0, rtime / 1000000.0);
+end:
+    avio_close(server);
+    if (ret < 0 && ret != AVERROR_EOF) {
+        fprintf(stderr, "Some errors occurred: %s\n", av_err2str(ret));
+        return 1;
     }
-    av_log(NULL, AV_LOG_DEBUG, "%"PRIu64" frames successfully decoded, %"PRIu64" decoding errors\n",
-           decode_error_stat[0], decode_error_stat[1]);
-    if ((decode_error_stat[0] + decode_error_stat[1]) * max_error_rate < decode_error_stat[1])
-        exit_program(69);
-
-    exit_program(received_nb_signals ? 255 : main_return_code);
-    return main_return_code;
+    return 0;
 }
