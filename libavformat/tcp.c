@@ -102,6 +102,7 @@ static void customize_fd(void *ctx, int fd)
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tcp open\n");
     struct addrinfo hints = { 0 }, *ai, *cur_ai;
     int port, fd = -1;
     TCPContext *s = h->priv_data;
@@ -218,6 +219,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
 
 static int tcp_accept(URLContext *s, URLContext **c)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tcp accept\n");
     TCPContext *sc = s->priv_data;
     TCPContext *cc;
     int ret;
@@ -236,6 +238,7 @@ static int tcp_accept(URLContext *s, URLContext **c)
 
 static int tcp_read(URLContext *h, uint8_t *buf, int size)
 {
+    av_log(NULL, AV_LOG_INFO, "enter tcp read\n");
     TCPContext *s = h->priv_data;
     int ret;
 
