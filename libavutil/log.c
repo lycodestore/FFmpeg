@@ -401,16 +401,128 @@ end:
     ff_mutex_unlock(&mutex);
 }
 
-static void (*av_log_callback)(void*, int, const char*, va_list) =
-    av_log_default_callback;
+static void wgy_format_line(void *avcl, int level, const char *filename, const char *funcname, int line, const char *fmt, va_list vl,
+                        AVBPrint part[4], int *print_prefix, int type[2])
+{
+    AVClass* avc = avcl ? *(AVClass **) avcl : NULL;
+    av_bprint_init(part+0, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+1, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+2, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    av_bprint_init(part+3, 0, 65536);
 
-void av_log(void* avcl, int level, const char *fmt, ...)
+    if(type) type[0] = type[1] = AV_CLASS_CATEGORY_NA + 16;
+    if (*print_prefix && avc) {
+        if (avc->parent_log_context_offset) {
+            AVClass** parent = *(AVClass ***) (((uint8_t *) avcl) +
+                                   avc->parent_log_context_offset);
+            if (parent && *parent) {
+                av_bprintf(part+0, "[%s @ %p] ",
+                         (*parent)->item_name(parent), parent);
+                if(type) type[0] = get_category(parent);
+            }
+        }
+        av_bprintf(part+1, "[%s @ %p] ",
+                 avc->item_name(avcl), avcl);
+        if(type) type[1] = get_category(avcl);
+    }
+
+    if (*print_prefix && (level > AV_LOG_QUIET) && (flags & AV_LOG_PRINT_LEVEL))
+        av_bprintf(part+2, "[%s] ", get_level_str(level));
+
+    av_bprintf(part+3, "%s|%s|%d|", filename, funcname, line);
+    av_vbprintf(part+3, fmt, vl);
+
+    if(*part[0].str || *part[1].str || *part[2].str || *part[3].str) {
+        char lastc = part[3].len && part[3].len <= part[3].size ? part[3].str[part[3].len - 1] : 0;
+        *print_prefix = lastc == '\n' || lastc == '\r';
+    }
+}
+
+void av_log_wgy_callback(void* ptr, int level, const char *filename, const char *funcname, int code_line, const char* fmt, va_list vl)
+{
+    static int print_prefix = 1;
+    static int count;
+    static char prev[LINE_SZ];
+    AVBPrint part[4];
+    char line[LINE_SZ];
+    static int is_atty;
+    int type[2];
+    unsigned tint = 0;
+
+    if (level >= 0) {
+        tint = level & 0xff00;
+        level &= 0xff;
+    }
+
+    if (level > av_log_level)
+        return;
+    ff_mutex_lock(&mutex);
+
+    wgy_format_line(ptr, level, filename, funcname, code_line, fmt, vl, part, &print_prefix, type);
+    snprintf(line, sizeof(line), "%s%s%s%s", part[0].str, part[1].str, part[2].str, part[3].str);
+
+#if HAVE_ISATTY
+    if (!is_atty)
+        is_atty = isatty(2) ? 1 : -1;
+#endif
+
+    if (print_prefix && (flags & AV_LOG_SKIP_REPEATED) && !strcmp(line, prev) &&
+        *line && line[strlen(line) - 1] != '\r'){
+        count++;
+        if (is_atty == 1)
+            fprintf(stderr, "    Last message repeated %d times\r", count);
+        goto end;
+    }
+    if (count > 0) {
+        fprintf(stderr, "    Last message repeated %d times\n", count);
+        count = 0;
+    }
+    strcpy(prev, line);
+    sanitize(part[0].str);
+    colored_fputs(type[0], 0, part[0].str);
+    sanitize(part[1].str);
+    colored_fputs(type[1], 0, part[1].str);
+    sanitize(part[2].str);
+    colored_fputs(av_clip(level >> 3, 0, NB_LEVELS - 1), tint >> 8, part[2].str);
+    sanitize(part[3].str);
+    colored_fputs(av_clip(level >> 3, 0, NB_LEVELS - 1), tint >> 8, part[3].str);
+
+#if CONFIG_VALGRIND_BACKTRACE
+    if (level <= BACKTRACE_LOGLEVEL)
+        VALGRIND_PRINTF_BACKTRACE("%s", "");
+#endif
+end:
+    av_bprint_finalize(part+3, NULL);
+    ff_mutex_unlock(&mutex);
+}
+
+static void av_wgy_vlog(void* avcl, int level, const char *filename, const char *funcname, int line, const char *fmt, va_list vl)
+{
+    AVClass* avc = avcl ? *(AVClass **) avcl : NULL;
+    if (avc && avc->version >= (50 << 16 | 15 << 8 | 2) &&
+        avc->log_level_offset_offset && level >= AV_LOG_FATAL)
+        level += *(int *) (((uint8_t *) avcl) + avc->log_level_offset_offset);
+    av_log_wgy_callback(avcl, level, filename, funcname, line, fmt, vl);
+}
+
+void av_wgy_log(void* avcl, int level, const char *filename, const char *funcname, int line, const char *fmt, ...)
 {
     va_list vl;
     va_start(vl, fmt);
-    av_vlog(avcl, level, fmt, vl);
+    av_wgy_vlog(avcl, level, filename, funcname, line,fmt, vl);
     va_end(vl);
 }
+
+static void (*av_log_callback)(void*, int, const char*, va_list) =
+    av_log_default_callback;
+
+// void av_log(void* avcl, int level, const char *fmt, ...)
+// {
+//     va_list vl;
+//     va_start(vl, fmt);
+//     av_vlog(avcl, level, fmt, vl);
+//     va_end(vl);
+// }
 
 void av_log_once(void* avcl, int initial_level, int subsequent_level, int *state, const char *fmt, ...)
 {

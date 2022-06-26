@@ -221,6 +221,8 @@ typedef struct AVClass {
  */
 #define AV_LOG_C(x) ((x) << 8)
 
+//
+
 /**
  * Send the specified message to the log if the level is less than or equal
  * to the current av_log_level. By default, all logging messages are sent to
@@ -235,7 +237,13 @@ typedef struct AVClass {
  * @param fmt The format string (printf-compatible) that specifies how
  *        subsequent arguments are converted to output.
  */
-void av_log(void *avcl, int level, const char *fmt, ...) av_printf_format(3, 4);
+//void av_log(void *avcl, int level, const char *fmt, ...) av_printf_format(3, 4);
+
+void av_log_wgy_callback(void* ptr, int level, const char *filename, const char *funcname, int code_line, const char* fmt, va_list vl);
+
+void av_wgy_log(void *avcl, int level, const char *filename, const char *funcname, int line, const char *fmt, ...) av_printf_format(6, 7);
+
+#define av_log(avcl, level, ...) av_wgy_log(avcl, level, __FILE__, __func__, __LINE__, __VA_ARGS__)
 
 /**
  * Send the specified message to the log once with the initial_level and then with
